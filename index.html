@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quoridor Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0c0a;
+  --surface: #131311;
+  --surface2: #1a1a17;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --text: #e8e6df;
+  --muted: #6b6960;
+  --accent: #d4a843;
+  --red: #e24b4a;
+  --blue: #378add;
+  --green: #639922;
+  --mono: 'Space Mono', monospace;
+  --display: 'Syne', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--display);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ─── Layout ─── */
+.shell {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  grid-template-rows: 56px 1fr;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "sidebar main puzzles";
+  height: 100vh;
+  gap: 0;
+}
+
+/* ─── Topbar ─── */
+header {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logo {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.logo span { color: var(--accent); }
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+.topbar-right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+#status-text { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ─── Sidebar ─── */
+aside {
+  grid-area: sidebar;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.stat-row:last-child { border: none; }
+.stat-key { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.stat-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); }
+.stat-val.red { color: var(--red); }
+.stat-val.blue { color: var(--blue); }
+
+.btn {
+  width: 100%;
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background .15s, border-color .15s;
+  letter-spacing: .04em;
+}
+.btn:hover { background: var(--surface2); border-color: var(--border2); }
+.btn.primary { border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { background: rgba(212,168,67,0.08); }
+.btn.danger { border-color: rgba(226,75,74,0.4); color: var(--red); }
+.btn.danger:hover { background: rgba(226,75,74,0.06); }
+.btn .icon { font-size: 14px; opacity: 0.6; }
+
+.speed-row { display: flex; gap: 6px; }
+.speed-btn {
+  flex: 1;
+  padding: 6px 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.speed-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(212,168,67,0.07); }
+
+.eval-bar-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin: 4px 0; }
+.eval-bar-fill { height: 100%; transition: width .4s ease, background .4s; }
+
+.fence-pips { display: flex; gap: 3px; flex-wrap: wrap; }
+.pip {
+  width: 6px; height: 6px; border-radius: 1px;
+  transition: background .2s;
+}
+
+/* ─── Main board area ─── */
+main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--bg);
+}
+#board-canvas {
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  display: block;
+}
+.move-log {
+  width: 100%;
+  max-width: 480px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 42px;
+  overflow: hidden;
+}
+.move-log span {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+.move-log span.last { color: var(--accent); border-color: rgba(212,168,67,0.3); }
+
+/* ─── Puzzle panel ─── */
+#puzzle-panel {
+  grid-area: puzzles;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+}
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 100px;
+  background: rgba(212,168,67,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(212,168,67,0.25);
+}
+
+#puzzle-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#puzzle-list::-webkit-scrollbar { width: 4px; }
+#puzzle-list::-webkit-scrollbar-track { background: transparent; }
+#puzzle-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.puzzle-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+}
+.puzzle-card:hover { border-color: var(--border2); background: #1e1e1b; }
+.puzzle-card.active { border-color: var(--accent); }
+.puzzle-card.solved { opacity: 0.5; }
+
+.puzzle-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  grid-column: 1;
+}
+.puzzle-diff {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.diff-easy { background: rgba(99,153,34,0.15); color: var(--green); }
+.diff-medium { background: rgba(212,168,67,0.15); color: var(--accent); }
+.diff-hard { background: rgba(226,75,74,0.15); color: var(--red); }
+.puzzle-meta {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  grid-column: 1;
+}
+
+/* Puzzle viewer modal */
+#puzzle-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+#puzzle-modal.open { display: flex; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 24px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  max-width: 780px;
+  width: 95%;
+}
+.modal-side { display: flex; flex-direction: column; gap: 12px; min-width: 220px; }
+.modal-title { font-size: 18px; font-weight: 800; letter-spacing: -.5px; }
+.modal-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.8; }
+.modal-question {
+  background: var(--surface2);
+  border-left: 2px solid var(--accent);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.modal-btns { display: flex; flex-direction: column; gap: 6px; }
+#hint-text {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--green);
+  min-height: 20px;
+}
+.close-btn {
+  position: absolute;
+  top: 16px; right: 20px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 20px;
+}
+
+/* Scrollbar global */
+* { scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+
+/* Animaiton pour nouvelles cartes */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.puzzle-card.new { animation: slideIn .3s ease; }
+
+/* Export button at bottom */
+.panel-footer {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+}
+.panel-footer .btn { font-size: 10px; padding: 7px 10px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Topbar ── -->
+  <header>
+    <div class="logo">Quoridor<span>Lab</span></div>
+    <div class="tag">IA×IA — génération de puzzles</div>
+    <div class="topbar-right">
+      <div class="status-dot" id="dot"></div>
+      <span id="status-text">Initialisation…</span>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <aside>
+    <div>
+      <div class="section-label">Contrôles</div>
+      <div class="speed-row" style="margin-bottom:8px">
+        <button class="speed-btn" onclick="setSpeed(1200)">×0.5</button>
+        <button class="speed-btn active" onclick="setSpeed(600)">×1</button>
+        <button class="speed-btn" onclick="setSpeed(200)">×3</button>
+        <button class="speed-btn" onclick="setSpeed(50)">×10</button>
+      </div>
+      <button class="btn primary" onclick="togglePause()" id="pause-btn">
+        <span class="icon">⏸</span> <span id="pause-label">Pause</span>
+      </button>
+      <button class="btn" onclick="newGame()" style="margin-top:4px">
+        <span class="icon">↺</span> Nouvelle partie
+      </button>
+    </div>
+
+    <div style="border-top: 1px solid var(--border); padding-top:12px">
+      <div class="section-label">Partie en cours</div>
+      <div class="stat-row">
+        <span class="stat-key">coup</span>
+        <span class="stat-val" id="ply-val">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">tour</span>
+        <span class="stat-val" id="turn-val" style="color:var(--red)">Rouge</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">barrières ●</span>
+        <span class="stat-val red" id="fl-red">10</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">barrières ●</span>
+        <span class="stat-val blue" id="fl-blue">10</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Évaluation</div>
+      <div class="eval-bar-wrap">
+        <div class="eval-bar-fill" id="eval-bar" style="width:50%;background:var(--muted)"></div>
+      </div>
+      <div class="stat-row" style="border:none;padding-top:2px">
+        <span class="stat-key" id="eval-label">—</span>
+        <span class="stat-val" id="eval-num" style="font-size:11px">0</span>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid var(--border); padding-top:12px">
+      <div class="section-label">Statistiques globales</div>
+      <div class="stat-row">
+        <span class="stat-key">parties jouées</span>
+        <span class="stat-val" id="g-games">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">victoires rouge</span>
+        <span class="stat-val red" id="g-red">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">victoires bleu</span>
+        <span class="stat-val blue" id="g-blue">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">puzzles générés</span>
+        <span class="stat-val" id="g-puzzles">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">durée moy.</span>
+        <span class="stat-val" id="g-avg">—</span>
+      </div>
+    </div>
+
+    <div style="margin-top:auto; border-top:1px solid var(--border); padding-top:12px">
+      <div class="section-label">IA</div>
+      <div class="stat-row">
+        <span class="stat-key">profondeur</span>
+        <span class="stat-val">2–3</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">algo</span>
+        <span class="stat-val" style="font-size:10px">minimax αβ</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">éval.</span>
+        <span class="stat-val" style="font-size:10px">BFS delta</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main board ── -->
+  <main>
+    <canvas id="board-canvas"></canvas>
+    <div class="move-log" id="move-log"></div>
+  </main>
+
+  <!-- ── Puzzle panel ── -->
+  <div id="puzzle-panel">
+    <div class="panel-header">
+      <span class="panel-title">Puzzles</span>
+      <span class="badge" id="puzzle-count">0</span>
+    </div>
+    <div id="puzzle-list">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:16px 8px;text-align:center">
+        Les puzzles apparaîtront ici au fur et à mesure des parties…
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="btn" onclick="exportPuzzles()" style="flex:1">
+        <span>↓</span> Exporter JSON
+      </button>
+      <button class="btn danger" onclick="clearPuzzles()" style="flex:1">
+        <span>✕</span> Vider
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Puzzle modal ── -->
+<div id="puzzle-modal">
+  <div class="modal-box" style="position:relative">
+    <button class="close-btn" onclick="closeModal()">×</button>
+    <canvas id="puzzle-canvas" width="340" height="340"></canvas>
+    <div class="modal-side">
+      <div class="modal-title" id="m-title">Puzzle</div>
+      <div class="modal-meta" id="m-meta"></div>
+      <div class="modal-question" id="m-question"></div>
+      <div id="hint-text"></div>
+      <div class="modal-btns">
+        <button class="btn primary" onclick="showHint()"><span>💡</span> Indice</button>
+        <button class="btn" onclick="showSolution()"><span>✓</span> Voir solution</button>
+        <button class="btn" onclick="markSolvedModal()"><span>★</span> Marqué résolu</button>
+        <button class="btn danger" onclick="deleteCurrentPuzzle()"><span>✕</span> Supprimer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initState, applyMove, allLegalMoves, evaluate, moveLabel, bfsDistance } from './js/engine.js';
+import { getBestMove, isPuzzleWorthy, buildPuzzle } from './js/ai.js';
+import { BoardRenderer } from './js/renderer.js';
+import { PuzzleStore } from './js/store.js';
+
+/* ─── Init ─── */
+const renderer = new BoardRenderer(document.getElementById('board-canvas'), { size: 480 });
+const puzzleRenderer = new BoardRenderer(document.getElementById('puzzle-canvas'), { size: 340 });
+const store = new PuzzleStore();
+
+let state = initState();
+let paused = false;
+let speed = 600;
+let timer = null;
+let stats = { games: 0, wins: [0, 0], plies: [] };
+let currentPuzzleId = null;
+let moveHistory = [];
+
+/* ─── Speed ─── */
+window.setSpeed = function(ms) {
+  speed = ms;
+  document.querySelectorAll('.speed-btn').forEach((b, i) => {
+    b.classList.toggle('active', [1200,600,200,50][i] === ms);
+  });
+  restartTimer();
+};
+
+/* ─── Pause ─── */
+window.togglePause = function() {
+  paused = !paused;
+  document.getElementById('pause-btn').querySelector('.icon').textContent = paused ? '▶' : '⏸';
+  document.getElementById('pause-label').textContent = paused ? 'Reprendre' : 'Pause';
+  document.getElementById('dot').style.background = paused ? 'var(--muted)' : 'var(--green)';
+  document.getElementById('status-text').textContent = paused ? 'En pause' : 'IA en cours…';
+  if (!paused) restartTimer();
+  else clearTimeout(timer);
+};
+
+function restartTimer() {
+  clearTimeout(timer);
+  if (!paused) timer = setTimeout(tick, speed);
+}
+
+/* ─── Main game loop ─── */
+async function tick() {
+  if (paused) return;
+
+  if (state.winner !== null) {
+    // Game over
+    stats.games++;
+    stats.wins[state.winner]++;
+    stats.plies.push(state.ply);
+    updateGlobalStats();
+    renderer.draw(state, { lastMove: moveHistory[moveHistory.length - 1] });
+    document.getElementById('status-text').textContent =
+      `Partie ${stats.games} — ${state.winner === 0 ? 'Rouge' : 'Bleu'} gagne en ${state.ply} coups`;
+    await sleep(speed * 2.5);
+    newGame();
+    return;
+  }
+
+  // Get AI move
+  const depth = state.fences.length < 4 ? 2 : 3;
+  const result = getBestMove(state, depth);
+  if (!result.move) { newGame(); return; }
+
+  // Check puzzle before applying
+  if (isPuzzleWorthy(state)) {
+    const puzzle = buildPuzzle(state);
+    const added = store.add(puzzle);
+    if (added) {
+      addPuzzleCard(puzzle);
+      updatePuzzleCount();
+      updateGlobalStats();
+    }
+  }
+
+  moveHistory.push(result.move);
+  state = applyMove(state, result.move);
+  addMoveToLog(result.move, state.ply - 1);
+  updateSidebar();
+  renderer.draw(state, { lastMove: result.move });
+
+  timer = setTimeout(tick, speed);
+}
+
+window.newGame = function() {
+  clearTimeout(timer);
+  state = initState();
+  moveHistory = [];
+  document.getElementById('move-log').innerHTML = '';
+  updateSidebar();
+  renderer.draw(state);
+  document.getElementById('status-text').textContent = 'IA en cours…';
+  document.getElementById('dot').style.background = paused ? 'var(--muted)' : 'var(--green)';
+  if (!paused) timer = setTimeout(tick, speed);
+};
+
+/* ─── UI updates ─── */
+function updateSidebar() {
+  document.getElementById('ply-val').textContent = state.ply;
+  const turnEl = document.getElementById('turn-val');
+  turnEl.textContent = state.turn === 0 ? 'Rouge' : 'Bleu';
+  turnEl.style.color = state.turn === 0 ? 'var(--red)' : 'var(--blue)';
+  document.getElementById('fl-red').textContent = state.fences_left[0];
+  document.getElementById('fl-blue').textContent = state.fences_left[1];
+
+  const ev = evaluate(state);
+  const pct = Math.max(3, Math.min(97, 50 + ev * 3));
+  const bar = document.getElementById('eval-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = ev > 3 ? 'var(--red)' : ev < -3 ? 'var(--blue)' : 'var(--muted)';
+  document.getElementById('eval-num').textContent = (ev > 0 ? '+' : '') + ev;
+  document.getElementById('eval-label').textContent =
+    ev > 4 ? 'Avantage rouge' : ev < -4 ? 'Avantage bleu' : 'Équilibré';
+}
+
+function updateGlobalStats() {
+  document.getElementById('g-games').textContent = stats.games;
+  document.getElementById('g-red').textContent = stats.wins[0];
+  document.getElementById('g-blue').textContent = stats.wins[1];
+  document.getElementById('g-puzzles').textContent = store.getAll().length;
+  const avg = stats.plies.length
+    ? Math.round(stats.plies.reduce((a,b)=>a+b,0)/stats.plies.length)
+    : '—';
+  document.getElementById('g-avg').textContent = avg + (stats.plies.length ? ' coups' : '');
+}
+
+function addMoveToLog(move, idx) {
+  const log = document.getElementById('move-log');
+  const span = document.createElement('span');
+  span.textContent = `${idx}.${moveLabel(move)}`;
+  span.className = 'last';
+  // Remove 'last' from previous
+  log.querySelectorAll('.last').forEach(el => el.classList.remove('last'));
+  span.className = 'last';
+  log.appendChild(span);
+  if (log.children.length > 30) log.removeChild(log.firstChild);
+}
+
+/* ─── Puzzle panel ─── */
+function updatePuzzleCount() {
+  document.getElementById('puzzle-count').textContent = store.getAll().length;
+}
+
+function addPuzzleCard(puzzle) {
+  const list = document.getElementById('puzzle-list');
+  // Remove placeholder
+  const placeholder = list.querySelector('[data-placeholder]');
+  if (placeholder) placeholder.remove();
+
+  const card = document.createElement('div');
+  card.className = 'puzzle-card new';
+  card.dataset.id = puzzle.id;
+  const cols = 'abcdefghi';
+  const p0 = puzzle.state.pawns[0];
+  const p1 = puzzle.state.pawns[1];
+  card.innerHTML = `
+    <div class="puzzle-name">Coup ${puzzle.ply} — ${puzzle.difficulty === 'easy' ? 'Facile' : puzzle.difficulty === 'hard' ? 'Difficile' : 'Moyen'}</div>
+    <div class="puzzle-diff diff-${puzzle.difficulty}">${puzzle.difficulty}</div>
+    <div class="puzzle-meta">● ${cols[p0.c]}${9-p0.r} · ○ ${cols[p1.c]}${9-p1.r} · ${puzzle.state.fences.length} bar.</div>
+  `;
+  card.onclick = () => openPuzzle(puzzle.id);
+  list.insertBefore(card, list.firstChild);
+}
+
+function renderAllPuzzles() {
+  const list = document.getElementById('puzzle-list');
+  list.innerHTML = '';
+  const puzzles = store.getAll();
+  if (!puzzles.length) {
+    list.innerHTML = `<div data-placeholder style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:16px 8px;text-align:center">Les puzzles apparaîtront ici au fur et à mesure des parties…</div>`;
+    return;
+  }
+  puzzles.forEach(p => addPuzzleCard(p));
+  updatePuzzleCount();
+}
+
+/* ─── Puzzle modal ─── */
+window.openPuzzle = function(id) {
+  const puzzle = store.get(id);
+  if (!puzzle) return;
+  currentPuzzleId = id;
+
+  document.getElementById('hint-text').textContent = '';
+  document.getElementById('m-title').textContent =
+    `Puzzle — coup ${puzzle.ply}`;
+  document.getElementById('m-meta').innerHTML =
+    `Difficulté : ${puzzle.difficulty}<br>` +
+    `Barrières posées : ${puzzle.state.fences.length}<br>` +
+    `Fences restantes : Rouge ${puzzle.state.fences_left[0]}, Bleu ${puzzle.state.fences_left[1]}<br>` +
+    `Distance Rouge : ${puzzle.d0} · Distance Bleu : ${puzzle.d1}`;
+  document.getElementById('m-question').textContent =
+    puzzle.state.turn === 0
+      ? '🔴 Rouge joue. Quel est le meilleur coup ?'
+      : '🔵 Bleu joue. Quel est le meilleur coup ?';
+
+  puzzleRenderer.draw(puzzle.state);
+
+  // Highlight active puzzle card
+  document.querySelectorAll('.puzzle-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.id === id);
+  });
+
+  document.getElementById('puzzle-modal').classList.add('open');
+};
+
+window.closeModal = function() {
+  document.getElementById('puzzle-modal').classList.remove('open');
+  currentPuzzleId = null;
+};
+
+window.showHint = function() {
+  const puzzle = store.get(currentPuzzleId);
+  if (!puzzle) return;
+  const m = puzzle.bestMove;
+  const hint = m.type === 'pawn'
+    ? `Le meilleur coup est un déplacement de pion.`
+    : `Le meilleur coup est une barrière ${m.dir === 'h' ? 'horizontale' : 'verticale'}.`;
+  document.getElementById('hint-text').textContent = '💡 ' + hint;
+};
+
+window.showSolution = function() {
+  const puzzle = store.get(currentPuzzleId);
+  if (!puzzle) return;
+  const m = puzzle.bestMove;
+  const label = moveLabel(m);
+  document.getElementById('hint-text').textContent = `✓ Solution : ${label}`;
+  if (m.type === 'fence') {
+    puzzleRenderer.draw(puzzle.state, { hintFence: m });
+  } else {
+    puzzleRenderer.draw(puzzle.state, { highlights: [m] });
+  }
+};
+
+window.markSolvedModal = function() {
+  if (!currentPuzzleId) return;
+  store.markSolved(currentPuzzleId, true);
+  const card = document.querySelector(`.puzzle-card[data-id="${currentPuzzleId}"]`);
+  if (card) card.classList.add('solved');
+  closeModal();
+};
+
+window.deleteCurrentPuzzle = function() {
+  if (!currentPuzzleId) return;
+  store.remove(currentPuzzleId);
+  const card = document.querySelector(`.puzzle-card[data-id="${currentPuzzleId}"]`);
+  if (card) card.remove();
+  updatePuzzleCount();
+  closeModal();
+};
+
+/* ─── Export / Clear ─── */
+window.exportPuzzles = function() {
+  const data = store.exportJSON();
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `quoridor-puzzles-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.clearPuzzles = function() {
+  if (!confirm('Vider tous les puzzles ?')) return;
+  store.puzzles = [];
+  store._save();
+  renderAllPuzzles();
+  updatePuzzleCount();
+  updateGlobalStats();
+};
+
+/* ─── Keyboard ─── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === ' ') { e.preventDefault(); togglePause(); }
+});
+
+/* ─── Utils ─── */
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ─── Boot ─── */
+renderAllPuzzles();
+updateGlobalStats();
+newGame();
+document.getElementById('status-text').textContent = 'IA en cours…';
+</script>
+</body>
+</html>
